@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  name              String
+  phone             String
+  password          String
+  birthdate         DateTime?
+  height            Float?
+  weight            Float?
+  medicine          String?
+  medicalBackground String?
+
+  doctors           Doctor[]           @relation(fields: [doctorIds], references: [id])
+  doctorIds         String[]           @db.ObjectId
+  healthData        HealthData[] 
+  healthDataRecords HealthDataRecord[]
+  notes             Note[]
+
+  createdAt DateTime @default(now())
+}
+
+model Doctor {
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  phone      String
+  password   String
+  speciality String?
+  address    String?
+
+  patients   Patient[] @relation(fields: [patientIds], references: [id])
+  patientIds String[]  @db.ObjectId
+
+  createdAt DateTime @default(now())
+}
+
+model HealthData {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  patient          Patient?           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId        String?            @db.ObjectId
+  name             String
+  quantitative     Boolean
+  rangeMin         Float?
+  rangeMax         Float?
+  unit             String?
+  healthDataRecord HealthDataRecord[]
+
+  createdAt DateTime @default(now())
+}
+
+model HealthDataRecord {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  patient      Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId    String     @db.ObjectId
+  healthData   HealthData @relation(fields: [healthDataId], references: [id], onDelete: Cascade)
+  healthDataId String     @db.ObjectId
+  value        Float
+  note         String?
+  createdAt    DateTime   @default(now())
+}
+
+model Note {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId String   @db.ObjectId
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+}
