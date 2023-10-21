@@ -4,7 +4,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && tsc"
   },
   "dependencies": {
     "@prisma/client": "5.4.2",
