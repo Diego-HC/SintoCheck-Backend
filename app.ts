@@ -81,21 +81,22 @@ app.post(`/signup/doctor`, async (req, res) => {
   const { name, phone, password, speciality, address } = req.body;
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  let seEncontroDoctor = true
-  let code = ""
+  let foundDoctor = true
+  
   
   //un problema es que en teoria podrian haber muchos requests al querer crear muchos doctores
   //pero como la probabilidad de eso es muy baja no me preocupa ahora
   let cont = 0;
-  while (seEncontroDoctor === true && cont < 5) {
-    let code = generateCode()
+  let code = ""
+  while (foundDoctor === true && cont < 5) {
+    code = generateCode()
     const doctor = await prisma.doctor.findFirst({
       where: {
         code: code,
       },
     });
     if (doctor === null) {
-      seEncontroDoctor = false
+      foundDoctor = false
     }
     //contador para no hacer esta funcion muchas veces
     cont++
@@ -282,11 +283,6 @@ app.get(`/healthData`, verifyToken, async (req, res) => {
 
   res.status(200).json(result);
   // res.json(result);
-});
-app.get('/doctors/:id', verifyToken, async (req, res) => {
-  const {id} = req.params;
-  //encontrar todos los doctores de ese paciente
-
 });
 
 app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
@@ -519,10 +515,10 @@ app.get(
 );
 
 app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
-  const { doctorCodigo, patientId } = req.body;
+  const { doctorCode, patientId } = req.body;
   const doctor = await prisma.doctor.findFirst({
     where: {
-      code: doctorCodigo,
+      code: doctorCode,
     },
   });
   let doctorId = ""
@@ -566,7 +562,3 @@ app.delete(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
 
 export default app;
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
- console.log(`Server is running on port ${port}`);
-});
