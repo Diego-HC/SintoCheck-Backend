@@ -1,6 +1,9 @@
+// TODO: checar que al hacer el request solo pueda editar el usuario sus propias cosas.
+
 import { PrismaClient } from "@prisma/client";
 import express from "express";
-import bcrypt from "bcrypt";
+// import bcrypt from "bcryptjs";
+var bcrypt = require("bcryptjs");
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -9,6 +12,15 @@ const app = express();
 dotenv.config();
 
 app.use(express.json());
+
+function generateCode() {
+  const charset = " ";
+  let retVal = "";
+  for (let i = 0, n = charset.length; i < 6; ++i) {
+    retVal += charset.charAt(Math.floor(Math.random() * n)).toUpperCase();
+  }
+  return retVal;
+}
 
 // --- Authentication ---
 function verifyToken(req: any, res: any, next: any) {
@@ -68,12 +80,30 @@ app.post(`/signup/doctor`, async (req, res) => {
   const { name, phone, password, speciality, address } = req.body;
 
   const hashedPassword = await bcrypt.hash(password, 10);
+  let foundDoctor = true;
 
+  let cont = 0;
+  let code = "";
+  while (foundDoctor && cont < 5) {
+    code = generateCode();
+    const doctor = await prisma.doctor.findFirst({
+      where: {
+        code: code,
+      },
+    });
+    if (doctor === null) {
+      foundDoctor = false;
+    }
+    //contador para no hacer esta funcion muchas veces
+    cont++;
+  }
+  //creamos al nuevo doctor y lo retornamos.
   const result = await prisma.doctor.create({
     data: {
       name,
       phone,
       password: hashedPassword,
+      code,
       speciality,
       address,
     },
@@ -480,8 +510,16 @@ app.get(
 );
 
 app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
-  const { doctorId, patientId } = req.body;
-
+  const { doctorCode, patientId } = req.body;
+  const doctor = await prisma.doctor.findFirst({
+    where: {
+      code: doctorCode,
+    },
+  });
+  let doctorId = "";
+  if (doctor !== null) {
+    doctorId = doctor.id;
+  }
   const result = await prisma.doctor.update({
     where: {
       id: doctorId,
