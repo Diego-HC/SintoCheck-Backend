@@ -2,7 +2,8 @@
 
 import { PrismaClient } from "@prisma/client";
 import express from "express";
-import bcrypt from "bcrypt";
+// import bcrypt from "bcryptjs";
+var bcrypt = require("bcryptjs");
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -12,16 +13,14 @@ dotenv.config();
 
 app.use(express.json());
 
-
 function generateCode() {
-  const charset = ' ';
-  let retVal = '';
+  const charset = " ";
+  let retVal = "";
   for (let i = 0, n = charset.length; i < 6; ++i) {
     retVal += charset.charAt(Math.floor(Math.random() * n)).toUpperCase();
   }
   return retVal;
 }
-
 
 // --- Authentication ---
 function verifyToken(req: any, res: any, next: any) {
@@ -81,25 +80,22 @@ app.post(`/signup/doctor`, async (req, res) => {
   const { name, phone, password, speciality, address } = req.body;
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  let foundDoctor = true
-  
-  
-  //un problema es que en teoria podrian haber muchos requests al querer crear muchos doctores
-  //pero como la probabilidad de eso es muy baja no me preocupa ahora
+  let foundDoctor = true;
+
   let cont = 0;
-  let code = ""
-  while (foundDoctor === true && cont < 5) {
-    code = generateCode()
+  let code = "";
+  while (foundDoctor && cont < 5) {
+    code = generateCode();
     const doctor = await prisma.doctor.findFirst({
       where: {
         code: code,
       },
     });
     if (doctor === null) {
-      foundDoctor = false
+      foundDoctor = false;
     }
     //contador para no hacer esta funcion muchas veces
-    cont++
+    cont++;
   }
   //creamos al nuevo doctor y lo retornamos.
   const result = await prisma.doctor.create({
@@ -115,7 +111,6 @@ app.post(`/signup/doctor`, async (req, res) => {
 
   res.json(result);
 });
-
 
 app.post(`/login/patient`, async (req, res) => {
   const { phone, password } = req.body;
@@ -521,9 +516,9 @@ app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
       code: doctorCode,
     },
   });
-  let doctorId = ""
+  let doctorId = "";
   if (doctor !== null) {
-    doctorId = doctor.id
+    doctorId = doctor.id;
   }
   const result = await prisma.doctor.update({
     where: {
@@ -561,4 +556,3 @@ app.delete(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
 });
 
 export default app;
-
