@@ -32,6 +32,7 @@ model Doctor {
   name       String
   phone      String
   password   String
+  code       String?
   speciality String?
   address    String?
 
