@@ -349,6 +349,36 @@ app.put(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
   res.json(result);
 });
 
+app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await prisma.healthData.update({
+    where: {
+      id: id,
+    },
+    data: {
+      tracked: false,
+    },
+  });
+
+  res.json(result);
+});
+
+app.put(`/trackHealthData/:id`, verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await prisma.healthData.update({
+    where: {
+      id: id,
+    },
+    data: {
+      tracked: true,
+    },
+  });
+
+  res.json(result);
+});
+
 app.delete(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
   const { id } = req.params;
 
