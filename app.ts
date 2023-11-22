@@ -271,8 +271,11 @@ app.put(`/doctor/:id`, verifyToken, async (req, res) => {
 
 app.get(`/healthData`, verifyToken, async (req, res) => {
   const result = await prisma.healthData.findMany({
+    include: {
+      patient: true,
+    },
     where: {
-      patientId: null,
+      patient: null,
     },
   });
 
@@ -295,18 +298,11 @@ app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
 app.get(`/trackedHealthData/:id`, verifyToken, async (req, res) => {
   const { id } = req.params;
 
-  const result = await prisma.healthDataRecord.findMany({
+  const result = await prisma.healthData.findMany({
     where: {
       patientId: id,
-      // Return only the records of the last 7 days
-      createdAt: {
-        gte: new Date(new Date().setDate(new Date().getDate() - 7)),
-      },
+      tracked: true,
     },
-    select: {
-      healthData: true,
-    },
-    distinct: ["healthDataId"],
   });
 
   res.json(result);
