@@ -72,8 +72,7 @@ function verifyToken(req: any, res: any, next: any) {
 
 app.post("/image/patient", verifyToken, upload.single('image'), async (req, res) => {
   const {patientId} = req.body;
-  //@ts-ignore
-  const {path, filename} = req.file;
+  const {path, filename}: any = req.file;
 
   const patient = await prisma.patient.findFirst({
     where: {
@@ -195,6 +194,8 @@ app.post(`/login/patient`, async (req, res) => {
       phone,
     },
   });
+  
+  let {imageurl, imageFilename, ...restOfPatient}: any = result
 
   if (!result) {
     return res.status(401).json({ message: "Authentication failed" });
@@ -215,8 +216,8 @@ app.post(`/login/patient`, async (req, res) => {
     process.env.JWT_SECRET ?? "ola",
     { expiresIn: "14d" }
   );
-
-  res.json({ ...result, token });
+  
+  res.json({ ...restOfPatient, token });
 });
 
 app.post(`/login/doctor`, async (req, res) => {
@@ -655,5 +656,7 @@ app.delete(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
 
   res.json(result);
 });
-
+app.listen(3000, () => {
+  console.log(`Server is running on port ${3000}`);
+});
 export default app;
