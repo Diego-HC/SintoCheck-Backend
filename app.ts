@@ -22,8 +22,8 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
     cloudinary, 
-    //@ts-ignore
-    padams : {
+    params : {
+      //@ts-ignore
       folder: 'SintoCheck',
       allowedFormats: ['jpeg', 'png', 'jpg']
     }
