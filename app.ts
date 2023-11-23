@@ -2,7 +2,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import express from "express";
-import bcrypt from "bcrypt";
+var bcrypt = require("bcrypt.js");
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
 import multer from "multer";
@@ -36,8 +36,8 @@ app.use(express.json());
 
 
 function generateCode() {
-  const charset = ' ';
-  let retVal = '';
+  const charset = " ";
+  let retVal = "";
   for (let i = 0, n = charset.length; i < 6; ++i) {
     retVal += charset.charAt(Math.floor(Math.random() * n)).toUpperCase();
   }
@@ -160,19 +160,19 @@ app.post(`/signup/doctor`, async (req, res) => {
   //un problema es que en teoria podrian haber muchos requests al querer crear muchos doctores
   //pero como la probabilidad de eso es muy baja no me preocupa ahora
   let cont = 0;
-  let code = ""
-  while (foundDoctor === true && cont < 5) {
-    code = generateCode()
+  let code = "";
+  while (foundDoctor && cont < 5) {
+    code = generateCode();
     const doctor = await prisma.doctor.findFirst({
       where: {
         code: code,
       },
     });
     if (doctor === null) {
-      foundDoctor = false
+      foundDoctor = false;
     }
     //contador para no hacer esta funcion muchas veces
-    cont++
+    cont++;
   }
   //creamos al nuevo doctor y lo retornamos.
   const result = await prisma.doctor.create({
@@ -596,7 +596,7 @@ app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
   });
   let doctorId = ""
   if (doctor !== null) {
-    doctorId = doctor.id
+    doctorId = doctor.id;
   }
   const result = await prisma.doctor.update({
     where: {
