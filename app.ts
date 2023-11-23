@@ -2,25 +2,49 @@
 
 import { PrismaClient } from "@prisma/client";
 import express from "express";
-// import bcrypt from "bcryptjs";
-var bcrypt = require("bcryptjs");
+import bcrypt from "bcrypt";
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
-
+import multer from "multer";
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 const prisma = new PrismaClient();
 const app = express();
 dotenv.config();
 
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_KEY,
+    api_secret: process.env.CLOUDINARY_SECRET
+});
+
+const storage = new CloudinaryStorage({
+    cloudinary, 
+    //@ts-ignore
+    padams : {
+      folder: 'SintoCheck',
+      allowedFormats: ['jpeg', 'png', 'jpg']
+    }
+    
+})
+const upload = multer({storage});
+
+
+
 app.use(express.json());
 
+
 function generateCode() {
-  const charset = " ";
-  let retVal = "";
+  const charset = ' ';
+  let retVal = '';
   for (let i = 0, n = charset.length; i < 6; ++i) {
     retVal += charset.charAt(Math.floor(Math.random() * n)).toUpperCase();
   }
   return retVal;
 }
+
+
 
 // --- Authentication ---
 function verifyToken(req: any, res: any, next: any) {
@@ -44,8 +68,58 @@ function verifyToken(req: any, res: any, next: any) {
   );
 }
 
-// --- Account Management ---
 
+app.post("/image/patient", verifyToken, upload.single('image'), async (req, res) => {
+  const {patientId} = req.body;
+  //@ts-ignore
+  const {path, filename} = req.file;
+
+  const patient = await prisma.patient.findFirst({
+    where: {
+      id: patientId
+    }
+  })
+  if (patient !== null) {
+    if (patient.imageFilename !== null) {
+      //eliminar imagen de cloudinary
+      cloudinary.uploader.destroy(patient.imageFilename)
+    }
+    const patientImage = await prisma.patient.update({
+      where: {
+        id: patientId
+      },
+      data : {
+        imageurl: path,
+        imageFilename: filename
+      }
+    });
+
+    res.json(patientImage)
+  }
+  
+})
+
+app.get('/image/patient/:id', verifyToken, async (req, res) => {
+  const {id} = req.params
+  //obtener el patient de prisma
+  const patientImage = await prisma.patient.findFirst({
+    where: {
+      id: id,
+    },
+  });
+  if (patientImage !== null && patientImage.imageurl !== null) {
+    const data = {
+      url: patientImage.imageurl
+    }
+    res.json(data)
+    
+  } else {
+    res.json()
+  }
+
+})
+
+// --- Account Management ---
 app.post(`/signup/patient`, async (req, res) => {
   const {
     name,
@@ -80,22 +154,25 @@ app.post(`/signup/doctor`, async (req, res) => {
   const { name, phone, password, speciality, address } = req.body;
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  let foundDoctor = true;
-
+  let foundDoctor = true
+  
+  
+  //un problema es que en teoria podrian haber muchos requests al querer crear muchos doctores
+  //pero como la probabilidad de eso es muy baja no me preocupa ahora
   let cont = 0;
-  let code = "";
-  while (foundDoctor && cont < 5) {
-    code = generateCode();
+  let code = ""
+  while (foundDoctor === true && cont < 5) {
+    code = generateCode()
     const doctor = await prisma.doctor.findFirst({
       where: {
         code: code,
       },
     });
     if (doctor === null) {
-      foundDoctor = false;
+      foundDoctor = false
     }
     //contador para no hacer esta funcion muchas veces
-    cont++;
+    cont++
   }
   //creamos al nuevo doctor y lo retornamos.
   const result = await prisma.doctor.create({
@@ -111,6 +188,7 @@ app.post(`/signup/doctor`, async (req, res) => {
 
   res.json(result);
 });
+
 
 app.post(`/login/patient`, async (req, res) => {
   const { phone, password } = req.body;
@@ -184,6 +262,7 @@ app.delete(`/patient/:id`, async (req, res) => {
       id: id,
     },
   });
+  
 
   res.json(result);
 });
@@ -268,14 +347,10 @@ app.put(`/doctor/:id`, verifyToken, async (req, res) => {
 });
 
 // --- Health Data Lists ---
-
 app.get(`/healthData`, verifyToken, async (req, res) => {
   const result = await prisma.healthData.findMany({
-    include: {
-      patient: true,
-    },
     where: {
-      patient: null,
+      patientId: null,
     },
   });
 
@@ -298,11 +373,18 @@ app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
 app.get(`/trackedHealthData/:id`, verifyToken, async (req, res) => {
   const { id } = req.params;
 
-  const result = await prisma.healthData.findMany({
+  const result = await prisma.healthDataRecord.findMany({
     where: {
       patientId: id,
-      tracked: true,
+      // Return only the records of the last 7 days
+      createdAt: {
+        gte: new Date(new Date().setDate(new Date().getDate() - 7)),
+      },
     },
+    select: {
+      healthData: true,
+    },
+    distinct: ["healthDataId"],
   });
 
   res.json(result);
@@ -339,36 +421,6 @@ app.put(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
       rangeMin,
       rangeMax,
       unit,
-    },
-  });
-
-  res.json(result);
-});
-
-app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      tracked: false,
-    },
-  });
-
-  res.json(result);
-});
-
-app.put(`/trackHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      tracked: true,
     },
   });
 
@@ -542,9 +594,9 @@ app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
       code: doctorCode,
     },
   });
-  let doctorId = "";
+  let doctorId = ""
   if (doctor !== null) {
-    doctorId = doctor.id;
+    doctorId = doctor.id
   }
   const result = await prisma.doctor.update({
     where: {
