@@ -2,7 +2,8 @@
 
 import { PrismaClient } from "@prisma/client";
 import express from "express";
-var bcrypt = require("bcrypt.js");
+// import bcrypt from "bcryptjs";
+var bcrypt = require("bcryptjs");
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
 import multer from "multer";
