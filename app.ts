@@ -7,34 +7,29 @@ var bcrypt = require("bcryptjs");
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
 import multer from "multer";
-import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 const prisma = new PrismaClient();
 const app = express();
 dotenv.config();
 
-
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_KEY,
-    api_secret: process.env.CLOUDINARY_SECRET
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_KEY,
+  api_secret: process.env.CLOUDINARY_SECRET,
 });
 
 const storage = new CloudinaryStorage({
-    cloudinary, 
-    params : {
-      //@ts-ignore
-      folder: 'SintoCheck',
-      allowedFormats: ['jpeg', 'png', 'jpg']
-    }
-    
-})
-const upload = multer({storage});
-
-
+  cloudinary,
+  params: {
+    //@ts-ignore
+    folder: "SintoCheck",
+    allowedFormats: ["jpeg", "png", "jpg"],
+  },
+});
+const upload = multer({ storage });
 
 app.use(express.json());
-
 
 function generateCode() {
   const charset = "abcdefghijklmnopqrstuvwxyz1234567890";
@@ -44,8 +39,6 @@ function generateCode() {
   }
   return retVal;
 }
-
-
 
 // --- Authentication ---
 function verifyToken(req: any, res: any, next: any) {
@@ -69,38 +62,46 @@ function verifyToken(req: any, res: any, next: any) {
   );
 }
 
+app.post(
+  "/image/patient",
+  verifyToken,
+  upload.single("image"),
+  async (req, res) => {
+    const { patientId } = req.body;
 
-app.post("/image/patient", verifyToken, upload.single('image'), async (req, res) => {
-  const {patientId} = req.body;
-  const {path, filename}: any = req.file;
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
 
-  const patient = await prisma.patient.findFirst({
-    where: {
-      id: patientId
-    }
-  })
-  if (patient !== null) {
-    if (patient.imageFilename !== null) {
-      //eliminar imagen de cloudinary
-      cloudinary.uploader.destroy(patient.imageFilename)
-    }
-    const patientImage = await prisma.patient.update({
+    const { path, filename } = req.file;
+
+    const patient = await prisma.patient.findFirst({
       where: {
-        id: patientId
+        id: patientId,
       },
-      data : {
-        imageurl: path,
-        imageFilename: filename
-      }
     });
+    if (patient !== null) {
+      if (patient.imageFilename !== null) {
+        //eliminar imagen de cloudinary
+        cloudinary.uploader.destroy(patient.imageFilename);
+      }
+      const patientImage = await prisma.patient.update({
+        where: {
+          id: patientId,
+        },
+        data: {
+          imageurl: path,
+          imageFilename: filename,
+        },
+      });
 
-    res.json(patientImage)
+      res.json(patientImage);
+    }
   }
-  
-})
+);
 
-app.get('/image/patient/:id', verifyToken, async (req, res) => {
-  const {id} = req.params
+app.get("/image/patient/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
   //obtener el patient de prisma
   const patientImage = await prisma.patient.findFirst({
     where: {
@@ -109,15 +110,13 @@ app.get('/image/patient/:id', verifyToken, async (req, res) => {
   });
   if (patientImage !== null && patientImage.imageurl !== null) {
     const data = {
-      url: patientImage.imageurl
-    }
-    res.json(data)
-    
+      url: patientImage.imageurl,
+    };
+    res.json(data);
   } else {
-    res.json()
+    res.json();
   }
-
-})
+});
 
 // --- Account Management ---
 app.post(`/signup/patient`, async (req, res) => {
@@ -155,8 +154,7 @@ app.post(`/signup/doctor`, async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
   let foundDoctor = true;
-  
-  
+
   let cont = 0;
   let code = "";
   while (foundDoctor && cont < 5) {
@@ -185,7 +183,6 @@ app.post(`/signup/doctor`, async (req, res) => {
   res.json(result);
 });
 
-
 app.post(`/login/patient`, async (req, res) => {
   const { phone, password } = req.body;
 
@@ -194,8 +191,6 @@ app.post(`/login/patient`, async (req, res) => {
       phone,
     },
   });
-  
-  let {imageurl, imageFilename, ...restOfPatient}: any = result
 
   if (!result) {
     return res.status(401).json({ message: "Authentication failed" });
@@ -216,8 +211,8 @@ app.post(`/login/patient`, async (req, res) => {
     process.env.JWT_SECRET ?? "ola",
     { expiresIn: "14d" }
   );
-  
-  res.json({ ...restOfPatient, token });
+
+  res.json({ ...result, token });
 });
 
 app.post(`/login/doctor`, async (req, res) => {
@@ -260,7 +255,6 @@ app.delete(`/patient/:id`, async (req, res) => {
       id: id,
     },
   });
-  
 
   res.json(result);
 });
@@ -348,7 +342,7 @@ app.put(`/doctor/:id`, verifyToken, async (req, res) => {
 app.get(`/healthData`, verifyToken, async (req, res) => {
   const result = await prisma.healthData.findMany({
     include: {
-      patient: true
+      patient: true,
     },
     where: {
       patient: null,
@@ -386,7 +380,7 @@ app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
   res.json(result);
 });
 
-app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
+app.put(`/trackHealthData/:id`, verifyToken, async (req, res) => {
   const { id } = req.params;
 
   const result = await prisma.healthData.update({
@@ -394,7 +388,7 @@ app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
       id: id,
     },
     data: {
-      tracked: false,
+      tracked: true,
     },
   });
 
