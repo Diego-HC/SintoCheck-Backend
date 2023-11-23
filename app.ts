@@ -2,8 +2,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import express from "express";
-// import bcrypt from "bcryptjs";
-var bcrypt = require("bcryptjs");
+import bcrypt from "bcryptjs";
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -14,7 +13,7 @@ dotenv.config();
 app.use(express.json());
 
 function generateCode() {
-  const charset = " ";
+  const charset = "abcdefghijklmnopqrstuvwxyz0123456789";
   let retVal = "";
   for (let i = 0, n = charset.length; i < 6; ++i) {
     retVal += charset.charAt(Math.floor(Math.random() * n)).toUpperCase();
@@ -94,10 +93,10 @@ app.post(`/signup/doctor`, async (req, res) => {
     if (doctor === null) {
       foundDoctor = false;
     }
-    //contador para no hacer esta funcion muchas veces
+
     cont++;
   }
-  //creamos al nuevo doctor y lo retornamos.
+
   const result = await prisma.doctor.create({
     data: {
       name,
@@ -138,7 +137,7 @@ app.post(`/login/patient`, async (req, res) => {
       phone: result.phone,
     },
     process.env.JWT_SECRET ?? "ola",
-    { expiresIn: "14d" }
+    { expiresIn: "7d" }
   );
 
   res.json({ ...result, token });
@@ -280,7 +279,6 @@ app.get(`/healthData`, verifyToken, async (req, res) => {
   });
 
   res.status(200).json(result);
-  // res.json(result);
 });
 
 app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
