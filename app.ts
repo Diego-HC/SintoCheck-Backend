@@ -37,7 +37,7 @@ app.use(express.json());
 
 
 function generateCode() {
-  const charset = " ";
+  const charset = "abcdefghijklmnopqrstuvwxyz1234567890";
   let retVal = "";
   for (let i = 0, n = charset.length; i < 6; ++i) {
     retVal += charset.charAt(Math.floor(Math.random() * n)).toUpperCase();
@@ -155,11 +155,9 @@ app.post(`/signup/doctor`, async (req, res) => {
   const { name, phone, password, speciality, address } = req.body;
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  let foundDoctor = true
+  let foundDoctor = true;
   
   
-  //un problema es que en teoria podrian haber muchos requests al querer crear muchos doctores
-  //pero como la probabilidad de eso es muy baja no me preocupa ahora
   let cont = 0;
   let code = "";
   while (foundDoctor && cont < 5) {
@@ -172,10 +170,8 @@ app.post(`/signup/doctor`, async (req, res) => {
     if (doctor === null) {
       foundDoctor = false;
     }
-    //contador para no hacer esta funcion muchas veces
     cont++;
   }
-  //creamos al nuevo doctor y lo retornamos.
   const result = await prisma.doctor.create({
     data: {
       name,
@@ -350,8 +346,11 @@ app.put(`/doctor/:id`, verifyToken, async (req, res) => {
 // --- Health Data Lists ---
 app.get(`/healthData`, verifyToken, async (req, res) => {
   const result = await prisma.healthData.findMany({
+    include: {
+      patient: true
+    },
     where: {
-      patientId: null,
+      patient: null,
     },
   });
 
@@ -371,21 +370,44 @@ app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
   res.status(200).json(result);
 });
 
+app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await prisma.healthData.update({
+    where: {
+      id: id,
+    },
+    data: {
+      tracked: false,
+    },
+  });
+
+  res.json(result);
+});
+
+app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await prisma.healthData.update({
+    where: {
+      id: id,
+    },
+    data: {
+      tracked: false,
+    },
+  });
+
+  res.json(result);
+});
+
 app.get(`/trackedHealthData/:id`, verifyToken, async (req, res) => {
   const { id } = req.params;
 
-  const result = await prisma.healthDataRecord.findMany({
+  const result = await prisma.healthData.findMany({
     where: {
       patientId: id,
-      // Return only the records of the last 7 days
-      createdAt: {
-        gte: new Date(new Date().setDate(new Date().getDate() - 7)),
-      },
+      tracked: true,
     },
-    select: {
-      healthData: true,
-    },
-    distinct: ["healthDataId"],
   });
 
   res.json(result);
@@ -595,7 +617,7 @@ app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
       code: doctorCode,
     },
   });
-  let doctorId = ""
+  let doctorId = "";
   if (doctor !== null) {
     doctorId = doctor.id;
   }

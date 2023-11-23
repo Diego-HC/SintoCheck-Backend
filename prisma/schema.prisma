@@ -58,6 +58,8 @@ model HealthData {
   rangeMax         Float?
   unit             String?
   healthDataRecord HealthDataRecord[]
+  tracked          Boolean            @default(true)
+
 
   createdAt DateTime @default(now())
 }
