@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon src/index.ts",
+    "dev": "nodemon index.ts",
     "test": "jest",
     "postinstall": "prisma generate",
     "build": "prisma generate && tsc"

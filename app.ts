@@ -1,5 +1,3 @@
-// TODO: checar que al hacer el request solo pueda editar el usuario sus propias cosas.
-
 import { PrismaClient } from "@prisma/client";
 import express from "express";
 import bcrypt from "bcryptjs";
@@ -55,15 +53,80 @@ function verifyToken(req: any, res: any, next: any) {
         return res.status(401).json({ message: "Authentication failed" });
       }
 
-      req.user = decoded;
+      req.user = { id: decoded.id };
+
+      console.log(decoded);
+
       next();
     }
   );
 }
 
+async function authorizeUser(req: any, res: any, next: any) {
+  const id = req.body.id || req.params.id;
+
+  if (!id) {
+    return res.status(400).json({ message: "Missing id" });
+  }
+
+  const patient = await prisma.patient.findFirst({
+    where: {
+      id: id,
+    },
+  });
+
+  // Check if the user is authorized to access this patient's data
+  if (!patient || patient.id !== req.user.id) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  // If the user is authorized, call next() to continue to the route handler
+  next();
+}
+
+async function authorizeUserPatientId(req: any, res: any, next: any) {
+  const patientId = req.body.patientId || req.params.patientId;
+
+  if (!patientId) {
+    return res.status(400).json({ message: "Missing id" });
+  }
+
+  const patient = await prisma.patient.findFirst({
+    where: {
+      id: patientId,
+    },
+  });
+
+  // Check if the user is authorized to access this patient's data
+  if (!patient || patient.id !== req.user.id) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  // If the user is authorized, call next() to continue to the route handler
+  next();
+}
+
+async function authorizeUserByHDId(req: any, res: any, next: any) {
+  const { id } = req.params;
+  const hd = await prisma.healthData.findFirst({
+    where: {
+      id: id,
+    },
+  });
+
+  // Check if the user is authorized to access this patient's data
+  if (!hd || hd.patientId !== req.user.id) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  // If the user is authorized, call next() to continue to the route handler
+  next();
+}
+
 app.post(
   "/image/patient",
   verifyToken,
+  authorizeUserPatientId,
   upload.single("image"),
   async (req, res) => {
     const { patientId } = req.body;
@@ -99,7 +162,7 @@ app.post(
   }
 );
 
-app.get("/image/patient/:id", verifyToken, async (req, res) => {
+app.get("/image/patient/:id", verifyToken, authorizeUser, async (req, res) => {
   const { id } = req.params;
   //obtener el patient de prisma
   const patientImage = await prisma.patient.findFirst({
@@ -166,7 +229,7 @@ app.post(`/signup/doctor`, async (req, res) => {
     if (doctor === null) {
       foundDoctor = false;
     }
-    
+
     cont++;
   }
 
@@ -216,39 +279,7 @@ app.post(`/login/patient`, async (req, res) => {
   res.json({ ...result, token });
 });
 
-app.post(`/login/doctor`, async (req, res) => {
-  const { phone, password } = req.body;
-
-  const result = await prisma.doctor.findFirst({
-    where: {
-      phone,
-    },
-  });
-
-  if (!result) {
-    return res.status(401).json({ message: "Authentication failed" });
-  }
-
-  const passwordMatch = await bcrypt.compare(password, result.password);
-
-  if (!passwordMatch) {
-    return res.status(401).json({ message: "Authentication failed" });
-  }
-
-  const token = jsonwebtoken.sign(
-    {
-      id: result.id,
-      name: result.name,
-      phone: result.phone,
-    },
-    process.env.JWT_SECRET ?? "ola",
-    { expiresIn: "1h" }
-  );
-
-  res.json({ ...result, token });
-});
-
-app.delete(`/patient/:id`, async (req, res) => {
+app.delete(`/patient/:id`, verifyToken, authorizeUser, async (req, res) => {
   const { id } = req.params;
 
   const result = await prisma.patient.delete({
@@ -260,7 +291,7 @@ app.delete(`/patient/:id`, async (req, res) => {
   res.json(result);
 });
 
-app.delete(`/doctor/:id`, verifyToken, async (req, res) => {
+app.delete(`/doctor/:id`, async (req, res) => {
   const { id } = req.params;
 
   const result = await prisma.doctor.delete({
@@ -272,7 +303,7 @@ app.delete(`/doctor/:id`, verifyToken, async (req, res) => {
   res.json(result);
 });
 
-app.put(`/patient/:id`, verifyToken, async (req, res) => {
+app.put(`/patient/:id`, verifyToken, authorizeUser, async (req, res) => {
   const { id } = req.params;
   const {
     name,
@@ -302,43 +333,6 @@ app.put(`/patient/:id`, verifyToken, async (req, res) => {
   res.json(result);
 });
 
-app.put(`/patientPassword/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { password } = req.body;
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const result = await prisma.patient.update({
-    where: {
-      id: id,
-    },
-    data: {
-      password: hashedPassword,
-    },
-  });
-
-  res.json(result);
-});
-
-app.put(`/doctor/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { name, phone, speciality, address } = req.body;
-
-  const result = await prisma.doctor.update({
-    where: {
-      id: id,
-    },
-    data: {
-      name,
-      phone,
-      speciality,
-      address,
-    },
-  });
-
-  res.json(result);
-});
-
 // --- Health Data Lists ---
 app.get(`/healthData`, verifyToken, async (req, res) => {
   const result = await prisma.healthData.findMany({
@@ -353,118 +347,130 @@ app.get(`/healthData`, verifyToken, async (req, res) => {
   res.status(200).json(result);
 });
 
-app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
+app.get(
+  `/personalizedHealthData/:id`,
+  verifyToken,
+  authorizeUser,
+  async (req, res) => {
+    const { id } = req.params;
 
-  const result = await prisma.healthData.findMany({
-    where: {
-      patientId: id,
-    },
-  });
-
-  res.status(200).json(result);
-});
-
-app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      tracked: false,
-    },
-  });
-
-  res.json(result);
-});
-
-app.put(`/trackHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      tracked: true,
-    },
-  });
-
-  res.json(result);
-});
-
-app.get(`/trackedHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.findMany({
-    where: {
-      patientId: id,
-      tracked: true,
-    },
-  });
-
-  res.json(result);
-});
-
-app.post(`/personalizedHealthData`, verifyToken, async (req, res) => {
-  const { name, quantitative, patientId, rangeMin, rangeMax, unit } = req.body;
-
-  const result = await prisma.healthData.create({
-    data: {
-      name,
-      quantitative,
-      patientId,
-      rangeMin,
-      rangeMax,
-      unit,
-    },
-  });
-
-  res.status(201).json(result);
-});
-
-app.put(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { name, quantitative, rangeMin, rangeMax, unit } = req.body;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      name,
-      quantitative,
-      rangeMin,
-      rangeMax,
-      unit,
-    },
-  });
-
-  res.json(result);
-});
-
-app.delete(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.delete({
-    where: {
-      id: id,
-      patientId: {
-        not: null,
+    const result = await prisma.healthData.findMany({
+      where: {
+        patientId: id,
       },
-    },
-  });
+    });
 
-  res.json(result);
-});
+    res.status(200).json(result);
+  }
+);
+
+app.put(
+  `/untrackHealthData/:id`,
+  verifyToken,
+  authorizeUserByHDId,
+  async (req, res) => {
+    const { id } = req.params;
+
+    const result = await prisma.healthData.update({
+      where: {
+        id: id,
+      },
+      data: {
+        tracked: false,
+      },
+    });
+
+    res.json(result);
+  }
+);
+
+app.put(
+  `/trackHealthData/:id`,
+  verifyToken,
+  authorizeUserByHDId,
+  async (req, res) => {
+    const { id } = req.params;
+
+    const result = await prisma.healthData.update({
+      where: {
+        id: id,
+      },
+      data: {
+        tracked: true,
+      },
+    });
+
+    res.json(result);
+  }
+);
+
+app.get(
+  `/trackedHealthData/:id`,
+  verifyToken,
+  authorizeUser,
+  async (req, res) => {
+    const { id } = req.params;
+
+    const result = await prisma.healthData.findMany({
+      where: {
+        patientId: id,
+        tracked: true,
+      },
+    });
+
+    res.json(result);
+  }
+);
+
+app.post(
+  `/personalizedHealthData`,
+  verifyToken,
+  authorizeUserPatientId,
+  async (req, res) => {
+    const { name, quantitative, patientId, rangeMin, rangeMax, unit } =
+      req.body;
+
+    const result = await prisma.healthData.create({
+      data: {
+        name,
+        quantitative,
+        patientId,
+        rangeMin,
+        rangeMax,
+        unit,
+      },
+    });
+
+    res.status(201).json(result);
+  }
+);
+
+app.delete(
+  `/personalizedHealthData/:id`,
+  verifyToken,
+  authorizeUserByHDId,
+  async (req, res) => {
+    const { id } = req.params;
+
+    const result = await prisma.healthData.delete({
+      where: {
+        id: id,
+        patientId: {
+          not: null,
+        },
+      },
+    });
+
+    res.json(result);
+  }
+);
 
 // --- Health Data Records ---
 
 app.get(
   `/healthDataRecords/:patientId/:healthDataId`,
   verifyToken,
+  authorizeUserPatientId,
   async (req, res) => {
     const { patientId, healthDataId } = req.params;
 
@@ -482,65 +488,46 @@ app.get(
   }
 );
 
-app.post(`/healthDataRecord`, verifyToken, async (req, res) => {
-  const { patientId, healthDataId, value, note } = req.body;
+app.post(
+  `/healthDataRecord`,
+  verifyToken,
+  authorizeUserPatientId,
+  async (req, res) => {
+    const { patientId, healthDataId, value, note } = req.body;
 
-  const result = await prisma.healthDataRecord.create({
-    data: {
-      patientId,
-      healthDataId,
-      value,
-      note,
-    },
-  });
+    const result = await prisma.healthDataRecord.create({
+      data: {
+        patientId,
+        healthDataId,
+        value,
+        note,
+      },
+    });
 
-  res.json(result);
-});
-
-app.put(`/healthDataRecord/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { value, note } = req.body;
-
-  const result = await prisma.healthDataRecord.update({
-    where: {
-      id: id,
-    },
-    data: {
-      value,
-      note,
-    },
-  });
-
-  res.json(result);
-});
-
-app.delete(`/healthDataRecord/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthDataRecord.delete({
-    where: {
-      id: id,
-    },
-  });
-
-  res.json(result);
-});
+    res.json(result);
+  }
+);
 
 // --- Notes ---
 
-app.get(`/notes/:patientId`, verifyToken, async (req, res) => {
-  const { patientId } = req.params;
+app.get(
+  `/notes/:patientId`,
+  verifyToken,
+  authorizeUserPatientId,
+  async (req, res) => {
+    const { patientId } = req.params;
 
-  const result = await prisma.note.findMany({
-    where: {
-      patientId: patientId,
-    },
-  });
+    const result = await prisma.note.findMany({
+      where: {
+        patientId: patientId,
+      },
+    });
 
-  res.json(result);
-});
+    res.json(result);
+  }
+);
 
-app.post(`/note`, verifyToken, async (req, res) => {
+app.post(`/note`, verifyToken, authorizeUserPatientId, async (req, res) => {
   const { title, content, patientId } = req.body;
 
   const result = await prisma.note.create({
@@ -554,24 +541,7 @@ app.post(`/note`, verifyToken, async (req, res) => {
   res.json(result);
 });
 
-app.put(`/note/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { title, content } = req.body;
-
-  const result = await prisma.note.update({
-    where: {
-      id: id,
-    },
-    data: {
-      title,
-      content,
-    },
-  });
-
-  res.json(result);
-});
-
-app.delete(`/note/:id`, verifyToken, async (req, res) => {
+app.delete(`/note/:id`, verifyToken, authorizeUser, async (req, res) => {
   const { id } = req.params;
 
   const result = await prisma.note.delete({
@@ -588,6 +558,7 @@ app.delete(`/note/:id`, verifyToken, async (req, res) => {
 app.get(
   `/doctorPatientRelationship/:patientId`,
   verifyToken,
+  authorizeUserPatientId,
   async (req, res) => {
     const { patientId } = req.params;
 
@@ -605,50 +576,60 @@ app.get(
   }
 );
 
-app.post(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
-  const { doctorCode, patientId } = req.body;
-  const doctor = await prisma.doctor.findFirst({
-    where: {
-      code: doctorCode,
-    },
-  });
-  let doctorId = "";
-  if (doctor !== null) {
-    doctorId = doctor.id;
+app.post(
+  `/doctorPatientRelationship`,
+  verifyToken,
+  authorizeUserPatientId,
+  async (req, res) => {
+    const { doctorCode, patientId } = req.body;
+    const doctor = await prisma.doctor.findFirst({
+      where: {
+        code: doctorCode,
+      },
+    });
+    let doctorId = "";
+    if (doctor !== null) {
+      doctorId = doctor.id;
+    }
+    const result = await prisma.doctor.update({
+      where: {
+        id: doctorId,
+      },
+      data: {
+        patients: {
+          connect: {
+            id: patientId,
+          },
+        },
+      },
+    });
+
+    res.json(result);
   }
-  const result = await prisma.doctor.update({
-    where: {
-      id: doctorId,
-    },
-    data: {
-      patients: {
-        connect: {
-          id: patientId,
+);
+
+app.delete(
+  `/doctorPatientRelationship`,
+  verifyToken,
+  authorizeUserPatientId,
+  async (req, res) => {
+    const { doctorId, patientId } = req.body;
+
+    const result = await prisma.doctor.update({
+      where: {
+        id: doctorId,
+      },
+      data: {
+        patients: {
+          disconnect: {
+            id: patientId,
+          },
         },
       },
-    },
-  });
+    });
 
-  res.json(result);
-});
-
-app.delete(`/doctorPatientRelationship`, verifyToken, async (req, res) => {
-  const { doctorId, patientId } = req.body;
-
-  const result = await prisma.doctor.update({
-    where: {
-      id: doctorId,
-    },
-    data: {
-      patients: {
-        disconnect: {
-          id: patientId,
-        },
-      },
-    },
-  });
-
-  res.json(result);
-});
+    res.json(result);
+  }
+);
 
 export default app;
