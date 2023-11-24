@@ -17,10 +17,13 @@ model Patient {
   weight            Float?
   medicine          String?
   medicalBackground String?
+  imageurl          String?
+  imageFilename     String?
 
-  doctors           Doctor[]           @relation(fields: [doctorIds], references: [id])
-  doctorIds         String[]           @db.ObjectId
-  healthData        HealthData[] 
+  doctors   Doctor[] @relation(fields: [doctorIds], references: [id])
+  doctorIds String[] @db.ObjectId
+
+  healthData        HealthData[]
   healthDataRecords HealthDataRecord[]
   notes             Note[]
 
@@ -28,13 +31,15 @@ model Patient {
 }
 
 model Doctor {
-  id         String  @id @default(auto()) @map("_id") @db.ObjectId
-  name       String
-  phone      String
-  password   String
-  code       String?
-  speciality String?
-  address    String?
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  phone         String
+  password      String
+  code          String?
+  speciality    String?
+  address       String?
+  imageurl      String?
+  imageFilename String?
 
   patients   Patient[] @relation(fields: [patientIds], references: [id])
   patientIds String[]  @db.ObjectId

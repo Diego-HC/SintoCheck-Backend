@@ -5,10 +5,28 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jsonwebtoken from "jsonwebtoken";
 import dotenv from "dotenv";
-
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 const prisma = new PrismaClient();
 const app = express();
 dotenv.config();
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_KEY,
+  api_secret: process.env.CLOUDINARY_SECRET,
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    //@ts-ignore
+    folder: "SintoCheck",
+    allowedFormats: ["jpeg", "png", "jpg"],
+  },
+});
+const upload = multer({ storage });
 
 app.use(express.json());
 
@@ -43,8 +61,63 @@ function verifyToken(req: any, res: any, next: any) {
   );
 }
 
-// --- Account Management ---
+app.post(
+  "/image/patient",
+  verifyToken,
+  upload.single("image"),
+  async (req, res) => {
+    const { patientId } = req.body;
 
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const { path, filename } = req.file;
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: patientId,
+      },
+    });
+    if (patient !== null) {
+      if (patient.imageFilename !== null) {
+        //eliminar imagen de cloudinary
+        cloudinary.uploader.destroy(patient.imageFilename);
+      }
+      const patientImage = await prisma.patient.update({
+        where: {
+          id: patientId,
+        },
+        data: {
+          imageurl: path,
+          imageFilename: filename,
+        },
+      });
+
+      res.json(patientImage);
+    }
+  }
+);
+
+app.get("/image/patient/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  //obtener el patient de prisma
+  const patientImage = await prisma.patient.findFirst({
+    where: {
+      id: id,
+    },
+  });
+  if (patientImage !== null && patientImage.imageurl !== null) {
+    const data = {
+      url: patientImage.imageurl,
+    };
+    res.json(data);
+  } else {
+    res.json();
+  }
+});
+
+// --- Account Management ---
 app.post(`/signup/patient`, async (req, res) => {
   const {
     name,
@@ -93,7 +166,7 @@ app.post(`/signup/doctor`, async (req, res) => {
     if (doctor === null) {
       foundDoctor = false;
     }
-
+    
     cont++;
   }
 
@@ -267,7 +340,6 @@ app.put(`/doctor/:id`, verifyToken, async (req, res) => {
 });
 
 // --- Health Data Lists ---
-
 app.get(`/healthData`, verifyToken, async (req, res) => {
   const result = await prisma.healthData.findMany({
     include: {
@@ -291,6 +363,36 @@ app.get(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
   });
 
   res.status(200).json(result);
+});
+
+app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await prisma.healthData.update({
+    where: {
+      id: id,
+    },
+    data: {
+      tracked: false,
+    },
+  });
+
+  res.json(result);
+});
+
+app.put(`/trackHealthData/:id`, verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await prisma.healthData.update({
+    where: {
+      id: id,
+    },
+    data: {
+      tracked: true,
+    },
+  });
+
+  res.json(result);
 });
 
 app.get(`/trackedHealthData/:id`, verifyToken, async (req, res) => {
@@ -337,36 +439,6 @@ app.put(`/personalizedHealthData/:id`, verifyToken, async (req, res) => {
       rangeMin,
       rangeMax,
       unit,
-    },
-  });
-
-  res.json(result);
-});
-
-app.put(`/untrackHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      tracked: false,
-    },
-  });
-
-  res.json(result);
-});
-
-app.put(`/trackHealthData/:id`, verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  const result = await prisma.healthData.update({
-    where: {
-      id: id,
-    },
-    data: {
-      tracked: true,
     },
   });
 
