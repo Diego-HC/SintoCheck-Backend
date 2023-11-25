@@ -445,6 +445,31 @@ app.post(
   }
 );
 
+app.put(
+  `/personalizedHealthData/:id`,
+  verifyToken,
+  authorizeUserByHDId,
+  async (req, res) => {
+    const { id } = req.params;
+    const { name, quantitative, rangeMin, rangeMax, unit } = req.body;
+
+    const result = await prisma.healthData.update({
+      where: {
+        id: id,
+      },
+      data: {
+        name,
+        quantitative,
+        rangeMin,
+        rangeMax,
+        unit,
+      },
+    });
+
+    res.json(result);
+  }
+);
+
 app.delete(
   `/personalizedHealthData/:id`,
   verifyToken,
