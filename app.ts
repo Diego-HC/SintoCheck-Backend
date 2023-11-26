@@ -440,6 +440,17 @@ app.post(
     const { name, quantitative, patientId, rangeMin, rangeMax, unit } =
       req.body;
 
+    const hd = await prisma.healthData.findFirst({
+      where: {
+        name: name,
+        patientId: patientId,
+      },
+    });
+
+    if (hd !== null) {
+      return res.status(400).json({ message: "Health Data already exists" });
+    }
+
     const result = await prisma.healthData.create({
       data: {
         name,
@@ -462,6 +473,17 @@ app.put(
   async (req, res) => {
     const { id } = req.params;
     const { name, quantitative, rangeMin, rangeMax, unit } = req.body;
+
+    const hd = await prisma.healthData.findFirst({
+      where: {
+        name: name,
+        patientId: (req as any).user.id,
+      },
+    });
+
+    if (hd !== null) {
+      return res.status(400).json({ message: "Health Data already exists" });
+    }
 
     const result = await prisma.healthData.update({
       where: {
