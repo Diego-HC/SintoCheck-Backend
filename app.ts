@@ -193,6 +193,16 @@ app.post(`/signup/patient`, async (req, res) => {
     medicalBackground,
   } = req.body;
 
+  const patient = await prisma.patient.findFirst({
+    where: {
+      phone: phone,
+    },
+  });
+
+  if (patient !== null) {
+    return res.status(400).json({ message: "Phone already registered" });
+  }
+
   const hashedPassword = await bcrypt.hash(password, 10);
 
   const result = await prisma.patient.create({
